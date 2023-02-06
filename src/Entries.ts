@@ -1,9 +1,11 @@
 import * as PD from './Prob';
+import countBy from 'lodash/countBy'
 
 export interface Entry {
   group: string,
   difficulty: number,
-  task: string
+  task: string,
+  subcategory?: string,
 }
 
 export const STAT = 'Stat';
@@ -15,7 +17,7 @@ export const BOSS = 'Boss';
 export const DIFF_0 = 0;
 export const DIFF_1 = 1;
 export const DIFF_2 = 2;
-export const DIFF_3 = 2;
+export const DIFF_3 = 3;
 
 export const ALL_CATEGORIES = [STAT, WEAPON, NPC, CHALLENGE, BOSS]
 
@@ -27,50 +29,94 @@ export function poolCategory(availableCategories: string[]) {
   return categories[0];
 }
 
-export function generateSample(availableCategories: string[]) {
+export function generateSample(availableCategories: string[], difficulty: number) {
   const category = poolCategory(availableCategories)
 
-  return PD.sample(byCategory[category], 1, true, undefined)[0]
+  const entries = (byCategory[category] as Entry[]).filter((e) => e.difficulty <= difficulty);
+  const subcategories = Object.keys(countBy(entries.map((e) => e.subcategory)));
+
+  const subcategory = PD.sample(subcategories, 1, true, undefined)[0];
+
+  const subsamples = entries.filter((entry) => entry.subcategory === subcategory);
+
+  return PD.sample(subsamples, 1, true, undefined)[0]
 }
 
 
 
 export const byCategory: any = {};
+export const bySubcategory: any = {};
 
+class EntryBuilder {
+  group: string = '';
+  subcategory: string = '';
 
+  entries: Entry[] = [];
 
-function entry(group: string, difficulty: number, task: string) {
+  constructor() {
+  }
+
+  setGroup(group: string) {
+    this.group = group;
+
+    return this;
+  }
+
+  setSubcategory(subcategory: string) {
+    this.subcategory = subcategory;
+
+    return this;
+  }
+
+  entry(difficulty: number, task: string) {
+    this.entries.push({
+      group: this.group, difficulty, task, subcategory: this.subcategory
+    })
+
+    return this;
+  }
+}
+
+function entry(group: string, difficulty: number, task: string, subcategory?: string) {
   return {
     group,
     difficulty,
     task,
+    subcategory: subcategory ?? 'default'
   }
 }
 
 function generateStatsEntries() {
   const stats = ['VITALITY', 'ATTUNEMENT', 'ENDURANCE', 'STRENGTH', 'DEXTERITY', 'RESISTANCE', 'INTELLIGENCE', 'FAITH']
 
-  const entries = [...stats.map((stat) => {
+  const builder = new EntryBuilder();
+  builder.setGroup(STAT);
+
+  builder.setSubcategory('raw')
+  stats.forEach((stat) => {
     let diff = DIFF_0;
     if (stat === 'RESISTANCE' || stat === 'ATTUNEMENT') {
       diff = DIFF_3;
     }
 
-    return entry(STAT, diff, `35 ${stat}`)
-  })];
+    builder.entry(diff, `35 ${stat}`)
+  });
 
+  builder.setSubcategory('mixed')
   stats.forEach((a) => {
     stats.forEach((b) => {
       if (a !== b) {
-        entries.push(entry(STAT, DIFF_1, `20 ${a} and ${b}`))
+        builder.entry(DIFF_1, `20 ${a} and ${b}`)
       }
     })
   })
 
-  return entries;
+  return builder.entries;
 }
 
 function generateBossEntries() {
+  const builder = new EntryBuilder();
+
   const kill = [
     'Ornstein and Smough',
     'Iron Golem',
@@ -85,97 +131,107 @@ function generateBossEntries() {
     'Taurus Demon',
   ]
 
-  const entries = [...kill.map((boss) => entry(BOSS, DIFF_1, `Kill ${boss}`))];
+  builder.setGroup(BOSS);
 
-  entries.push(
-    entry(BOSS, DIFF_2, 'Kill Moonlight butterfly with consumable only'),
-    entry(BOSS, DIFF_0, 'Kill Moonlight Butterfly first'),
-    entry(BOSS, DIFF_1, 'Kill Gorgyles without healing'),
-    entry(BOSS, DIFF_3, 'Kill Ornstein and Smough hitless'),
-    entry(BOSS, DIFF_0, 'Kill an boss with red tearstone ring be active'),
-    entry(BOSS, DIFF_3, 'Kill Ornstein & Smogh with a plus 0 Weapon'),
-    entry(BOSS, DIFF_3, 'Kill Asylum Demon with Bare Fists'),
-    entry(BOSS, DIFF_3, 'Kill Kalameet without Goughs Help'),
-    entry(BOSS, DIFF_2, 'Kill Quelaag with dagger only'),
-    entry(BOSS, DIFF_2, 'Kill Bed of Chaos without ranged attack')
-  )
+  for (const boss of kill) {
+    builder.entry(DIFF_1, `Kill ${boss}`)
+  }
 
-  return entries;
+  builder.entry(DIFF_2, 'Kill Moonlight butterfly with consumable')
+  builder.entry(DIFF_0, 'Kill Moonlight Butterfly first')
+  builder.entry(DIFF_1, 'Kill Gorgyles without healing')
+  builder.entry(DIFF_3, 'Kill Ornstein and Smough hitless')
+  builder.entry(DIFF_0, 'Kill an boss with red tearstone ring be active')
+  builder.entry(DIFF_3, 'Kill Ornstein & Smogh with a plus 0 Weapon')
+  builder.entry(DIFF_3, 'Kill Asylum Demon with Bare Fists')
+  builder.entry(DIFF_3, 'Kill Kalameet without Goughs Help')
+  builder.entry(DIFF_2, 'Kill Quelaag with dagger only')
+  builder.entry(DIFF_2, 'Kill Bed of Chaos without ranged attack')
+
+
+  return builder.entries;
 }
 
 function generateWeaponEntries() {
-  return [
-    entry(WEAPON, DIFF_2, 'Use Daggers'),
-    entry(WEAPON, DIFF_1, 'Use Straight Swords'),
-    entry(WEAPON, DIFF_1, 'Use Greatswords'),
-    entry(WEAPON, DIFF_1, 'Use Ultra Greatswords'),
-    entry(WEAPON, DIFF_1, 'Use Curved Swords'),
-    entry(WEAPON, DIFF_1, 'Use Katanas'),
-    entry(WEAPON, DIFF_2, 'Use Curved Greatswords'),
-    entry(WEAPON, DIFF_1, 'Use Piercing Swords'),
-    entry(WEAPON, DIFF_1, 'Use Axes'),
-    entry(WEAPON, DIFF_2, 'Use Great Axes'),
-    entry(WEAPON, DIFF_1, 'Use Hammers'),
-    entry(WEAPON, DIFF_2, 'Use Great Hammers'),
-    entry(WEAPON, DIFF_3, 'Use Fists & Claws'),
-    entry(WEAPON, DIFF_1, 'Use Spears'),
-    entry(WEAPON, DIFF_1, 'Use Halberds'),
-    entry(WEAPON, DIFF_3, 'Use Whips'),
-    entry(WEAPON, DIFF_2, 'Use Bows'),
-    entry(WEAPON, DIFF_3, 'Use Greatbows'),
-    entry(WEAPON, DIFF_3, 'Use Crossbows'),
-    entry(WEAPON, DIFF_2, 'Use Catalysts'),
-    entry(WEAPON, DIFF_2, 'Use Flames'),
-    entry(WEAPON, DIFF_3, 'Use Talismans'),
+  const builder = new EntryBuilder();
+  builder.setGroup(WEAPON);
 
-    entry(WEAPON, DIFF_0, 'Dont use Swords'),
-    entry(WEAPON, DIFF_0, 'Dont use Katanas'),
-    entry(WEAPON, DIFF_0, 'Dont use Halberds'),
-    entry(WEAPON, DIFF_0, 'Dont use Curved Swords'),
-    entry(WEAPON, DIFF_0, 'Dont use Daggers'),
-    entry(WEAPON, DIFF_1, 'Dont use Bows'),
-    entry(WEAPON, DIFF_1, 'Dont use Talismans'),
-    entry(WEAPON, DIFF_1, 'Dont use Catalysts'),
-    entry(WEAPON, DIFF_1, 'Dont use Flames'),
 
-    entry(WEAPON, DIFF_1, 'Obtain Crescent Axe'),
-    entry(WEAPON, DIFF_1, 'Obtain Dragonslayer Greatbow'),
-    entry(WEAPON, DIFF_2, 'Obtain Goughs Greatbow'),
-    entry(WEAPON, DIFF_3, 'Obtain Black Knight Shield'),
-    entry(WEAPON, DIFF_1, 'Obtain Gold Tracer'),
-    entry(WEAPON, DIFF_3, 'Obtain Jagged Ghost Blade'),
-    entry(WEAPON, DIFF_1, 'Obtain Dark Silver Tracer'),
-    entry(WEAPON, DIFF_3, 'Obtain Ghost Blade'),
-    entry(WEAPON, DIFF_2, 'Obtain Grant'),
-    entry(WEAPON, DIFF_3, 'Obtain Black Knight Greataxe'),
-    entry(WEAPON, DIFF_2, 'Obtain Stone Greataxe'),
-    entry(WEAPON, DIFF_3, 'Obtain Black Knight Sword'),
-    entry(WEAPON, DIFF_1, 'Obtain Stone Greatsword'),
-    entry(WEAPON, DIFF_3, 'Obtain Black Knight Halberd'),
-    entry(WEAPON, DIFF_1, 'Obtain Giants Halberd'),
-    entry(WEAPON, DIFF_3, 'Obtain Titanite Catch Pole'),
-    entry(WEAPON, DIFF_2, 'Obtain Blacksmith Giant Hammer'),
-    entry(WEAPON, DIFF_2, 'Obtain Hammer of Vamos'),
-    entry(WEAPON, DIFF_3, 'Obtain Channelers Trident'),
-    entry(WEAPON, DIFF_1, 'Obtain Silver Knight Spear'),
-    entry(WEAPON, DIFF_0, 'Obtain Astoras Straight Sword'),
-    entry(WEAPON, DIFF_1, 'Obtain Silver Knight Straight Sword'),
-    entry(WEAPON, DIFF_3, 'Obtain Black Knight Greatword'),
-    entry(WEAPON, DIFF_0, 'Obtain Crest Shield'),
-    entry(WEAPON, DIFF_0, 'Obtain Dragon Crest Shield'),
-    entry(WEAPON, DIFF_1, 'Obtain Silver Knight Shield'),
-    entry(WEAPON, DIFF_3, 'Obtain Cleansing Greatshield'),
-    entry(WEAPON, DIFF_1, 'Obtain Havels Greatshield'),
-    entry(WEAPON, DIFF_1, 'Obtain Stone Greatshield'),
-    entry(WEAPON, DIFF_2, 'Obtain Velkas Rapier'),
-    entry(WEAPON, DIFF_3, 'Obtain Dragon Greatsword'),
-    entry(WEAPON, DIFF_0, 'Obtain Dragon King Greataxe'),
-    entry(WEAPON, DIFF_0, 'Obtain Dragon Tooth'),
-    entry(WEAPON, DIFF_1, 'Obtain Drake sword'),
-    entry(WEAPON, DIFF_3, 'Obtain Moonlight Greatsword'),
-    entry(WEAPON, DIFF_3, 'Obtain Obisidian Greatsword'),
-    entry(WEAPON, DIFF_3, 'Obtain Priscillas Dagger'),
-  ]
+  builder.setSubcategory('use')
+    .entry(DIFF_2, 'Use Daggers for 3 bosses')
+    .entry(DIFF_1, 'Use Straight Swords for 3 bosses')
+    .entry(DIFF_1, 'Use Greatswords for 3 bosses')
+    .entry(DIFF_1, 'Use Ultra Greatswords for 3 bosses')
+    .entry(DIFF_1, 'Use Curved Swords for 3 bosses')
+    .entry(DIFF_1, 'Use Katanas for 3 bosses')
+    .entry(DIFF_2, 'Use Curved Greatswords for 3 bosses')
+    .entry(DIFF_1, 'Use Piercing Swords for 3 bosses')
+    .entry(DIFF_1, 'Use Axes for 3 bosses')
+    .entry(DIFF_2, 'Use Great Axes for 3 bosses')
+    .entry(DIFF_1, 'Use Hammers for 3 bosses')
+    .entry(DIFF_2, 'Use Great Hammers for 3 bosses')
+    .entry(DIFF_3, 'Use Fists & Claws for 3 bosses')
+    .entry(DIFF_1, 'Use Spears for 3 bosses')
+    .entry(DIFF_1, 'Use Halberds for 3 bosses')
+    .entry(DIFF_3, 'Use Whips for 3 bosses')
+    .entry(DIFF_3, 'Use Bows for 3 bosses')
+    .entry(DIFF_3, 'Use Greatbows for 3 bosses')
+    .entry(DIFF_3, 'Use Crossbows for 3 bosses')
+    .entry(DIFF_2, 'Use Catalysts for 3 bosses')
+    .entry(DIFF_2, 'Use Flames for 3 bosses')
+    .entry(DIFF_2, 'Use Talismans for 3 bosses')
+
+  builder.setSubcategory('dontuse')
+    .entry(DIFF_0, 'Dont use Swords')
+    .entry(DIFF_0, 'Dont use Katanas')
+    .entry(DIFF_0, 'Dont use Halberds')
+    .entry(DIFF_0, 'Dont use Curved Swords')
+    .entry(DIFF_0, 'Dont use Daggers')
+    .entry(DIFF_0, 'Dont use Bows')
+    .entry(DIFF_1, 'Dont use Talismans')
+    .entry(DIFF_1, 'Dont use Catalysts')
+    .entry(DIFF_1, 'Dont use Flames')
+
+  builder.setSubcategory('obtainweapon')
+    .entry(DIFF_1, 'Obtain Crescent Axe')
+    .entry(DIFF_1, 'Obtain Dragonslayer Greatbow')
+    .entry(DIFF_2, 'Obtain Goughs Greatbow')
+    .entry(DIFF_3, 'Obtain Black Knight Shield')
+    .entry(DIFF_1, 'Obtain Gold Tracer')
+    .entry(DIFF_3, 'Obtain Jagged Ghost Blade')
+    .entry(DIFF_1, 'Obtain Dark Silver Tracer')
+    .entry(DIFF_3, 'Obtain Ghost Blade')
+    .entry(DIFF_2, 'Obtain Grant')
+    .entry(DIFF_3, 'Obtain Black Knight Greataxe')
+    .entry(DIFF_2, 'Obtain Stone Greataxe')
+    .entry(DIFF_3, 'Obtain Black Knight Sword')
+    .entry(DIFF_1, 'Obtain Stone Greatsword')
+    .entry(DIFF_3, 'Obtain Black Knight Halberd')
+    .entry(DIFF_1, 'Obtain Giants Halberd')
+    .entry(DIFF_3, 'Obtain Titanite Catch Pole')
+    .entry(DIFF_2, 'Obtain Blacksmith Giant Hammer')
+    .entry(DIFF_2, 'Obtain Hammer of Vamos')
+    .entry(DIFF_3, 'Obtain Channelers Trident')
+    .entry(DIFF_1, 'Obtain Silver Knight Spear')
+    .entry(DIFF_0, 'Obtain Astoras Straight Sword')
+    .entry(DIFF_1, 'Obtain Silver Knight Straight Sword')
+    .entry(DIFF_3, 'Obtain Black Knight Greatword')
+    .entry(DIFF_0, 'Obtain Crest Shield')
+    .entry(DIFF_0, 'Obtain Dragon Crest Shield')
+    .entry(DIFF_1, 'Obtain Silver Knight Shield')
+    .entry(DIFF_3, 'Obtain Cleansing Greatshield')
+    .entry(DIFF_1, 'Obtain Havels Greatshield')
+    .entry(DIFF_1, 'Obtain Stone Greatshield')
+    .entry(DIFF_2, 'Obtain Velkas Rapier')
+    .entry(DIFF_3, 'Obtain Dragon Greatsword')
+    .entry(DIFF_0, 'Obtain Dragon King Greataxe')
+    .entry(DIFF_0, 'Obtain Dragon Tooth')
+    .entry(DIFF_1, 'Obtain Drake sword')
+    .entry(DIFF_3, 'Obtain Moonlight Greatsword')
+    .entry(DIFF_3, 'Obtain Obisidian Greatsword')
+    .entry(DIFF_3, 'Obtain Priscillas Dagger')
+
+  return builder.entries
 }
 
 const entries = [

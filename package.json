@@ -2,6 +2,7 @@
   "name": "bingo-souls",
   "version": "0.1.0",
   "private": true,
+  "homepage": ".",
   "dependencies": {
     "@emotion/react": "^11.10.5",
     "@mantine/core": "^5.10.2",
@@ -13,6 +14,7 @@
     "@types/node": "^16.18.11",
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
+    "lodash": "^4.17.21",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
